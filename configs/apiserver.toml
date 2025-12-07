@@ -1,5 +1,5 @@
 bind_addr = ":8080"
 log_level = "debug"
 
-database_url = "user=username host=localhost dbname=name sslmode=disable"
+database_url = "user=admin host=localhost dbname=rest_dev sslmode=disable"
 session_key = "secret_key"

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -55,18 +56,34 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) configureRouter() {
 	s.router.Use(s.setRequestID)
-	s.router.Use(s.logRequest)
 	s.router.Use(handlers.CORS(handlers.AllowedOrigins([]string{"*"})))
+	s.router.Use(s.logRequest)
+
 	s.router.HandleFunc("/users", s.handleUsersCreate()).Methods("POST")
 	s.router.HandleFunc("/sessions", s.handleSessionsCreate()).Methods("POST")
+	s.router.HandleFunc("/teams", s.handleTeamsCreate()).Methods("POST")
+	s.router.HandleFunc("/task", s.handleTaskCreate()).Methods("POST")
 
 	private := s.router.PathPrefix("/private").Subrouter()
 	private.Use(s.authenticateUser)
+
 	private.HandleFunc("/whoami", s.handlerWhoami()).Methods("GET")
+	private.HandleFunc("/team/{id}", s.handleTeamID()).Methods("GET")
+	private.HandleFunc("/team_user_id/{id}", s.handleTeamByUserID()).Methods("GET")
+	private.HandleFunc("/task/list", s.handleTaskList()).Methods("GET")
+	private.HandleFunc("/task/{task_id}", s.handleTaskGetID()).Methods("GET")
+
+	private.HandleFunc("/teams/{team_id}/members", s.handleTeamAddMembers()).Methods("POST")
+	private.HandleFunc("/task/{user_id}/member", s.handleTaskAssigneeID()).Methods("POST")
+	private.HandleFunc("/logout", s.handlerUsersDelete()).Methods("POST")
 
 	private.HandleFunc("/profile", s.handleUpdateProfile()).Methods("PUT")
-	private.HandleFunc("/logout", s.handlerUsersDelete()).Methods("DELETE")
-	private.HandleFunc("/delete", s.handlerDelete()).Methods("DELETE")
+	private.HandleFunc("/team/{team_id}", s.handleTeamUpdate()).Methods("PUT")
+	private.HandleFunc("/task/{task_id}", s.handleTaskUpdate()).Methods("PUT")
+
+	private.HandleFunc("/user/me", s.handlerDelete()).Methods("DELETE")
+	private.HandleFunc("/task/{task_id}", s.handleTaskDelete()).Methods("DELETE")
+	private.HandleFunc("/team/{team_id}/members/{user_id}", s.handleTeamMembersDelete()).Methods("DELETE")
 }
 
 func (s *server) setRequestID(next http.Handler) http.Handler {
@@ -86,8 +103,12 @@ func (s *server) logRequest(next http.Handler) http.Handler {
 		logger.Infof("started %s %s", r.Method, r.RequestURI)
 
 		start := time.Now()
-		rw := &responseWriter{w, http.StatusOK}
-		next.ServeHTTP(w, r)
+		rw := &responseWriter{
+			ResponseWriter: w,
+			code:           http.StatusOK,
+		}
+
+		next.ServeHTTP(rw, r)
 
 		logger.Infof(
 			"completed with %d %s in %v",
@@ -260,6 +281,340 @@ func (s *server) handleSessionsCreate() http.HandlerFunc {
 			return
 		}
 
+		s.respond(w, r, http.StatusOK, nil)
+	}
+}
+
+func (s *server) handleTeamsCreate() http.HandlerFunc {
+	type request struct {
+		Name        string `json:"name"`
+		Description string `json:"description"`
+		OwnerID     int    `json:"owner_id"`
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		req := &request{}
+		if err := json.NewDecoder(r.Body).Decode(req); err != nil {
+			s.error(w, r, http.StatusBadRequest, err)
+			return
+		}
+
+		t := &model.Team{
+			Name:        req.Name,
+			Description: req.Description,
+			OwnerID:     req.OwnerID,
+		}
+
+		if err := s.store.Team().Create(t); err != nil {
+			s.error(w, r, http.StatusUnprocessableEntity, err)
+			return
+		}
+
+		s.respond(w, r, http.StatusOK, nil)
+	}
+}
+
+func (s *server) handleTeamID() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+
+		idStr, ok := vars["id"]
+		if !ok {
+			s.error(w, r, http.StatusBadRequest, ErrTeamNotFound)
+			return
+		}
+
+		id, err := strconv.Atoi(idStr)
+		if err != nil {
+			s.error(w, r, http.StatusBadRequest, ErrInvalidTeamId)
+			return
+		}
+
+		team, err := s.store.Team().Find(id)
+		if err != nil {
+			s.error(w, r, http.StatusNotFound, err)
+			return
+		}
+
+		s.respond(w, r, http.StatusOK, team)
+	}
+}
+
+func (s *server) handleTeamByUserID() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+
+		idStr, ok := vars["id"]
+		if !ok {
+			s.error(w, r, http.StatusBadRequest, ErrTeamNotFound)
+			return
+		}
+
+		id, err := strconv.Atoi(idStr)
+		if err != nil {
+			s.error(w, r, http.StatusBadRequest, ErrInvalidTeamId)
+			return
+		}
+
+		teams, err := s.store.Team().FindByUser(id)
+		if err != nil {
+			s.error(w, r, http.StatusNotFound, err)
+			return
+		}
+
+		s.respond(w, r, http.StatusOK, teams)
+	}
+}
+
+func (s *server) handleTeamAddMembers() http.HandlerFunc {
+	type request struct {
+		UserID int `json:"user_id"`
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+
+		teamIDStr := vars["team_id"]
+
+		teamID, err := strconv.Atoi(teamIDStr)
+		if err != nil {
+			s.error(w, r, http.StatusBadRequest, err)
+			return
+		}
+
+		req := &request{}
+		if err := json.NewDecoder(r.Body).Decode(req); err != nil {
+			s.error(w, r, http.StatusBadRequest, err)
+			return
+		}
+
+		if err := s.store.Team().AddMembers(teamID, req.UserID); err != nil {
+			s.error(w, r, http.StatusNotFound, err)
+			return
+		}
+		s.respond(w, r, http.StatusOK, nil)
+	}
+}
+
+func (s *server) handleTeamMembersDelete() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+
+		teamIdStr := vars["team_id"]
+		userIdStr := vars["user_id"]
+
+		teamID, _ := strconv.Atoi(teamIdStr)
+		userID, _ := strconv.Atoi(userIdStr)
+
+		if err := s.store.Team().RemoveMembers(teamID, userID); err != nil {
+			s.error(w, r, http.StatusNotFound, err)
+			return
+		}
+		s.respond(w, r, http.StatusOK, nil)
+	}
+}
+
+func (s *server) handleTeamUpdate() http.HandlerFunc {
+	type request struct {
+		Name        string `json:"name"`
+		Description string `json:"description"`
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		idStr := mux.Vars(r)["team_id"]
+		id, err := strconv.Atoi(idStr)
+		if err != nil {
+			s.error(w, r, http.StatusBadRequest, ErrInvalidTeamId)
+			return
+		}
+
+		req := &request{}
+		if err := json.NewDecoder(r.Body).Decode(req); err != nil {
+			s.error(w, r, http.StatusBadRequest, err)
+			return
+		}
+
+		team := &model.Team{
+			ID:          id,
+			Name:        req.Name,
+			Description: req.Description,
+		}
+
+		if err := s.store.Team().Update(team); err != nil {
+			s.error(w, r, http.StatusBadRequest, err)
+			return
+		}
+
+		updates, err := s.store.Team().Find(id)
+		if err != nil {
+			s.error(w, r, http.StatusInternalServerError, err)
+			return
+		}
+
+		s.respond(w, r, http.StatusOK, updates)
+	}
+}
+
+func (s *server) handleTaskCreate() http.HandlerFunc {
+	type request struct {
+		Name     string             `json:"name"`
+		Content  string             `json:"content"`
+		Status   model.TaskStatus   `json:"status"`
+		Priority model.TaskPriority `json:"priority"`
+		DueDate  *time.Time         `json:"due_date"`
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		req := &request{}
+
+		if err := json.NewDecoder(r.Body).Decode(req); err != nil {
+			s.error(w, r, http.StatusBadRequest, err)
+			return
+		}
+
+		t := &model.Task{
+			Name:     req.Name,
+			Content:  req.Content,
+			Status:   req.Status,
+			Priority: req.Priority,
+			DueDate:  req.DueDate,
+		}
+
+		if err := s.store.Task().Create(t); err != nil {
+			s.error(w, r, http.StatusUnprocessableEntity, err)
+			return
+		}
+		s.respond(w, r, http.StatusOK, nil)
+	}
+}
+
+func (s *server) handleTaskList() http.HandlerFunc {
+	type request struct {
+		Name    string `json:"name"`
+		Content string `json:"content"`
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		req := &request{}
+
+		if err := json.NewDecoder(r.Body).Decode(req); err != nil {
+			s.error(w, r, http.StatusBadRequest, err)
+			return
+		}
+
+		tasks, err := s.store.Task().List()
+		if err != nil {
+			s.error(w, r, http.StatusNotFound, err)
+			return
+		}
+		s.respond(w, r, http.StatusOK, tasks)
+	}
+}
+
+func (s *server) handleTaskUpdate() http.HandlerFunc {
+	type request struct {
+		Name       string             `json:"name"`
+		Content    string             `json:"content"`
+		Status     model.TaskStatus   `json:"status"`
+		Priority   model.TaskPriority `json:"priority"`
+		AssigneeID *int               `json:"assignee_id"`
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		idStr := mux.Vars(r)["task_id"]
+		id, err := strconv.Atoi(idStr)
+		if err != nil {
+			s.error(w, r, http.StatusBadRequest, err)
+			return
+		}
+
+		req := &request{}
+		if err := json.NewDecoder(r.Body).Decode(req); err != nil {
+			s.error(w, r, http.StatusBadRequest, err)
+			return
+		}
+
+		task := &model.Task{
+			ID:         id,
+			Name:       req.Name,
+			Content:    req.Content,
+			Status:     req.Status,
+			Priority:   req.Priority,
+			AssigneeID: req.AssigneeID,
+		}
+
+		if err := s.store.Task().Update(task); err != nil {
+			s.error(w, r, http.StatusNotFound, err)
+			return
+		}
+
+		updated, err := s.store.Task().GetByID(id)
+		if err != nil {
+			s.error(w, r, http.StatusInternalServerError, err)
+			return
+		}
+
+		s.respond(w, r, http.StatusOK, updated)
+	}
+}
+
+func (s *server) handleTaskGetID() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		idStr := mux.Vars(r)["task_id"]
+		id, err := strconv.Atoi(idStr)
+		if err != nil {
+			s.error(w, r, http.StatusBadRequest, err)
+			return
+		}
+
+		task, err := s.store.Task().GetByID(id)
+		if err != nil {
+			s.error(w, r, http.StatusNotFound, err)
+			return
+		}
+		s.respond(w, r, http.StatusOK, task)
+	}
+}
+
+func (s *server) handleTaskDelete() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		idStr := mux.Vars(r)["task_id"]
+		taskID, err := strconv.Atoi(idStr)
+		if err != nil {
+			s.error(w, r, http.StatusBadRequest, err)
+			return
+		}
+
+		if err := s.store.Task().Delete(taskID); err != nil {
+			s.error(w, r, http.StatusNotFound, err)
+			return
+		}
+
+		s.respond(w, r, http.StatusOK, nil)
+	}
+}
+
+func (s *server) handleTaskAssigneeID() http.HandlerFunc {
+	type request struct {
+		TeamID int `json:"team_id"`
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
+		idStr := mux.Vars(r)["user_id"]
+		userID, err := strconv.Atoi(idStr)
+		if err != nil {
+			s.error(w, r, http.StatusBadRequest, err)
+			return
+		}
+
+		req := &request{}
+		if err := json.NewDecoder(r.Body).Decode(req); err != nil {
+			s.error(w, r, http.StatusUnprocessableEntity, err)
+			return
+		}
+
+		if err := s.store.Task().AssigneeUser(userID, req.TeamID); err != nil {
+			s.error(w, r, http.StatusInternalServerError, err)
+			return
+		}
 		s.respond(w, r, http.StatusOK, nil)
 	}
 }

@@ -8,6 +8,8 @@ import (
 // store ...
 type Store struct {
 	userRepository *UserRepository
+	teamRepository *TeamRepository
+	taskRepository *TaskRepository
 }
 
 func New() *Store {
@@ -25,4 +27,31 @@ func (s *Store) User() store.UserRepository {
 	}
 
 	return s.userRepository
+}
+
+func (s *Store) Team() store.TeamRepository {
+	if s.teamRepository != nil {
+		return s.teamRepository
+	}
+
+	s.teamRepository = &TeamRepository{
+		store:        s,
+		teams:        make(map[int]*model.Team),
+		team_members: make(map[int]map[int]bool),
+	}
+
+	return s.teamRepository
+}
+
+func (s *Store) Task() store.TaskRepository {
+	if s.taskRepository != nil {
+		return s.taskRepository
+	}
+
+	s.taskRepository = &TaskRepository{
+		store: s,
+		tasks: make(map[int]string),
+	}
+
+	return s.taskRepository
 }
