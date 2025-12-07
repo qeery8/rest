@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/gorilla/sessions"
+	_ "github.com/lib/pq"
 	"github.com/qeery8/rest/internal/app/store/sqlstore"
 )
 
