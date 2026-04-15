@@ -3,8 +3,8 @@ package apiserver
 import (
 	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
-	"github.com/qeery8/rest/internal/app/handler"
-	"github.com/qeery8/rest/internal/app/store"
+	"github.com/qeery8/rest/internal/store"
+	"github.com/qeery8/rest/internal/transport/handler"
 	"github.com/sirupsen/logrus"
 )
 

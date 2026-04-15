@@ -3,7 +3,7 @@ package sqlstore
 import (
 	"database/sql"
 
-	"github.com/qeery8/rest/internal/app/store"
+	"github.com/qeery8/rest/internal/store"
 )
 
 type Store struct {

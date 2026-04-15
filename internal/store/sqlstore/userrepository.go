@@ -3,8 +3,8 @@ package sqlstore
 import (
 	"database/sql"
 
-	"github.com/qeery8/rest/internal/app/model"
-	"github.com/qeery8/rest/internal/app/store"
+	"github.com/qeery8/rest/internal/model"
+	"github.com/qeery8/rest/internal/store"
 )
 
 type UserRepository struct {

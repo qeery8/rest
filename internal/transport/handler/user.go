@@ -7,10 +7,10 @@ import (
 
 	"github.com/gorilla/sessions"
 	"github.com/qeery8/rest/internal/app/ctxkeys"
-	"github.com/qeery8/rest/internal/app/model"
 	"github.com/qeery8/rest/internal/app/session"
-	"github.com/qeery8/rest/internal/app/store"
 	"github.com/qeery8/rest/internal/app/utils"
+	"github.com/qeery8/rest/internal/model"
+	"github.com/qeery8/rest/internal/store"
 )
 
 type UserHandlers struct {

@@ -3,8 +3,8 @@ package sqlstore
 import (
 	"time"
 
-	"github.com/qeery8/rest/internal/app/model"
-	"github.com/qeery8/rest/internal/app/store"
+	"github.com/qeery8/rest/internal/model"
+	"github.com/qeery8/rest/internal/store"
 )
 
 type TaskRepository struct {
@@ -135,5 +135,10 @@ func (r *TaskRepository) AssigneeUser(userID int, teamID int) error {
 	if affected == 0 {
 		return store.ErrUserNotInTeam
 	}
+	return nil
+}
+
+func (r *TaskRepository) DueDate() error {
+
 	return nil
 }

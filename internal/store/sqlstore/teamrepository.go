@@ -3,7 +3,7 @@ package sqlstore
 import (
 	"time"
 
-	"github.com/qeery8/rest/internal/app/model"
+	"github.com/qeery8/rest/internal/model"
 )
 
 type TeamRepository struct {

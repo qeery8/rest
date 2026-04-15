@@ -6,6 +6,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/qeery8/rest/internal/app/apiserver"
+	"github.com/qeery8/rest/internal/config"
 )
 
 var (
@@ -19,7 +20,7 @@ func init() {
 func main() {
 	flag.Parse()
 
-	config := apiserver.NewConfig()
+	config := config.NewConfig()
 	_, err := toml.DecodeFile(configPath, config)
 	if err != nil {
 		log.Fatal(err)

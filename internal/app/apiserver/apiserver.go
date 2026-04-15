@@ -6,10 +6,11 @@ import (
 
 	"github.com/gorilla/sessions"
 	_ "github.com/lib/pq"
-	"github.com/qeery8/rest/internal/app/store/sqlstore"
+	"github.com/qeery8/rest/internal/config"
+	"github.com/qeery8/rest/internal/store/sqlstore"
 )
 
-func Start(config *Config) error {
+func Start(config *config.Config) error {
 	db, err := newDB(config.DatabaseURL)
 	if err != nil {
 		return err

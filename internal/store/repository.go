@@ -1,6 +1,6 @@
 package store
 
-import "github.com/qeery8/rest/internal/app/model"
+import "github.com/qeery8/rest/internal/model"
 
 type UserRepository interface {
 	Create(*model.User) error
@@ -27,4 +27,5 @@ type TaskRepository interface {
 	Delete(id int) error
 	GetByID(id int) (*model.Task, error)
 	List() ([]*model.Task, error)
+	DueDate() error
 }

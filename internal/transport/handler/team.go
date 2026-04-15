@@ -7,9 +7,9 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/qeery8/rest/internal/app/errors"
-	"github.com/qeery8/rest/internal/app/model"
-	"github.com/qeery8/rest/internal/app/store"
 	"github.com/qeery8/rest/internal/app/utils"
+	"github.com/qeery8/rest/internal/model"
+	"github.com/qeery8/rest/internal/store"
 )
 
 type TeamHandlers struct {
